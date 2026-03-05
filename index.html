@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Jmbliss AI Assistant</title>
+  <style>
+    :root{
+      --bg:#0b0f19;
+      --panel:#111827;
+      --card:#0f172a;
+      --border:rgba(255,255,255,.10);
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --user:#2563eb;
+      --bot:#1f2937;
+      --accent:#22c55e;
+      --shadow: 0 12px 40px rgba(0,0,0,.45);
+      --radius:16px;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 600px at 20% 0%, #111827 0%, var(--bg) 55%);
+      color:var(--text);
+      height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:18px;
+    }
+
+    .app{
+      width:min(980px, 100%);
+      height:min(680px, 100%);
+      display:grid;
+      grid-template-columns: 280px 1fr;
+      gap:14px;
+    }
+
+    /* Sidebar */
+    .sidebar{
+      background: rgba(17,24,39,.7);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:16px;
+      backdrop-filter: blur(10px);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border-radius:12px;
+      background: rgba(15,23,42,.55);
+      border:1px solid var(--border);
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px rgba(34,197,94,.15);
+    }
+    .brand h2{
+      margin:0;
+      font-size:15px;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+    .brand p{
+      margin:2px 0 0;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .tips{
+      border:1px dashed rgba(255,255,255,.14);
+      border-radius:12px;
+      padding:12px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.5;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(37,99,235,.12);
+      border:1px solid rgba(37,99,235,.25);
+      color:#c7d2fe;
+      font-size:12px;
+      width:fit-content;
+    }
+
+    .actions{
+      margin-top:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .btn{
+      width:100%;
+      border:none;
+      cursor:pointer;
+      padding:10px 12px;
+      border-radius:12px;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border:1px solid var(--border);
+      transition: .15s ease;
+      font-weight:600;
+    }
+    .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
+    .btn:active{ transform: translateY(0px); }
+
+    /* Main chat */
+    .main{
+      background: rgba(17,24,39,.55);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+    .topbar{
+      padding:14px 16px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      background: rgba(15,23,42,.45);
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .title strong{ font-size:14px; }
+    .title span{ font-size:12px; color:var(--muted); }
+
+    .status{
+      font-size:12px;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .badge{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      font-weight:600;
+      color: var(--text);
+    }
+
+    .messages{
+      flex:1;
+      padding:16px;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .bubble-row{
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+    }
+
+    .avatar{
+      width:34px;height:34px;border-radius:12px;
+      background: rgba(255,255,255,.08);
+      border:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:14px;
+      color: var(--muted);
+      flex-shrink:0;
+    }
+
+    .bubble{
+      padding:12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      line-height:1.45;
+      font-size:14px;
+      white-space:pre-wrap;
+      word-wrap:break-word;
+    }
+
+    .user-row{ justify-content:flex-end; }
+    .user-row .bubble{
+      background: rgba(37,99,235,.18);
+      border-color: rgba(37,99,235,.35);
+    }
+    .bot-row .bubble{
+      background: rgba(15,23,42,.55);
+    }
+
+    .meta{
+      font-size:11px;
+      color: var(--muted);
+      margin-top:6px;
+    }
+
+    .composer{
+      border-top:1px solid var(--border);
+      padding:12px;
+      background: rgba(15,23,42,.45);
+      display:flex;
+      gap:10px;
+      align-items:flex-end;
+    }
+
+    textarea{
+      flex:1;
+      resize:none;
+      min-height:44px;
+      max-height:120px;
+      border-radius:12px;
+      padding:12px 12px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      outline:none;
+      font-size:14px;
+      line-height:1.35;
+    }
+    textarea::placeholder{ color: rgba(156,163,175,.8); }
+
+    .send{
+      border:none;
+      cursor:pointer;
+      padding:12px 14px;
+      border-radius:12px;
+      background: rgba(34,197,94,.18);
+      border:1px solid rgba(34,197,94,.35);
+      color: #d1fae5;
+      font-weight:800;
+      transition:.15s ease;
+      min-width: 92px;
+    }
+    .send:hover{ transform: translateY(-1px); }
+    .send:active{ transform: translateY(0px); }
+
+    /* typing dots */
+    .typing{
+      display:inline-flex;
+      gap:6px;
+      align-items:center;
+    }
+    .typing span{
+      width:7px;height:7px;border-radius:999px;
+      background: rgba(229,231,235,.65);
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2){ animation-delay:.15s; }
+    .typing span:nth-child(3){ animation-delay:.3s; }
+    @keyframes bounce{
+      0%, 60%, 100%{ transform: translateY(0); opacity:.55; }
+      30%{ transform: translateY(-4px); opacity:1; }
+    }
+
+    /* responsive */
+    @media (max-width: 860px){
+      .app{ grid-template-columns: 1fr; height: 92vh; }
+      .sidebar{ display:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="dot"></div>
+        <div>
+          <h2>Jmbliss AI</h2>
+          <p>Internal demo assistant</p>
+        </div>
+      </div>
+
+      <div class="pill">✅ API Connected • POST /chat</div>
+
+      <div class="tips">
+        Try these prompts:
+        <br>• “Suggest website sections for a salon”
+        <br>• “Automation ideas for lead capture”
+        <br>• “Shopify AI features for fashion store”
+        <br>• “WordPress AI plugin ideas”
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnClear">Clear chat</button>
+        <button class="btn" id="btnCopy">Copy last reply</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="title">
+          <strong>AI Assistant</strong>
+          <span>ChatGPT-style UI • Local API</span>
+        </div>
+        <div class="status">
+          <span class="badge" id="modeBadge">mode: —</span>
+          <span class="badge" id="sessionBadge">session: —</span>
+        </div>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="composer">
+        <textarea id="input" placeholder="Type your message… (Enter to send, Shift+Enter for new line)"></textarea>
+        <button class="send" id="sendBtn">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = "http://localhost:5050/chat";
+
+    // persistent session id (so your demo keeps same session)
+    const sessionId = localStorage.getItem("jmbliss_session") ||
+      ("sess_" + Math.random().toString(16).slice(2));
+
+    localStorage.setItem("jmbliss_session", sessionId);
+
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const sendBtn = document.getElementById("sendBtn");
+    const modeBadge = document.getElementById("modeBadge");
+    const sessionBadge = document.getElementById("sessionBadge");
+    const btnClear = document.getElementById("btnClear");
+    const btnCopy = document.getElementById("btnCopy");
+
+    sessionBadge.textContent = "session: " + sessionId;
+
+    let lastBotReply = "";
+
+    function addBubble(text, who="bot", meta="") {
+      const row = document.createElement("div");
+      row.className = "bubble-row " + (who === "user" ? "user-row" : "bot-row");
+
+      if (who === "bot") {
+        const avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.textContent = "AI";
+        row.appendChild(avatar);
+      }
+
+      const bubbleWrap = document.createElement("div");
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+
+      bubbleWrap.appendChild(bubble);
+
+      if (meta) {
+        const metaEl = document.createElement("div");
+        metaEl.className = "meta";
+        metaEl.textContent = meta;
+        bubbleWrap.appendChild(metaEl);
+      }
+
+      row.appendChild(bubbleWrap);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return bubble; // return bubble element if we want to update it (typing)
+    }
+
+    function addTyping() {
+      const row = document.createElement("div");
+      row.className = "bubble-row bot-row";
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = "AI";
+      row.appendChild(avatar);
+
+      const bubbleWrap = document.createElement("div");
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+
+      const typing = document.createElement("div");
+      typing.className = "typing";
+      typing.innerHTML = "<span></span><span></span><span></span>";
+
+      bubble.appendChild(typing);
+      bubbleWrap.appendChild(bubble);
+      row.appendChild(bubbleWrap);
+
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      return row; // so we can remove it later
+    }
+
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      addBubble(text, "user");
+      inputEl.value = "";
+      inputEl.focus();
+
+      const typingRow = addTyping();
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, message: text })
+        });
+
+        const data = await res.json();
+
+        typingRow.remove();
+
+        const reply = data.reply || data.error || "No reply";
+        lastBotReply = reply;
+
+        // show mode if your server sends mode/fallback
+        const mode = data.mode || (data.fallback ? "fallback" : "openai");
+        modeBadge.textContent = "mode: " + mode;
+
+        addBubble(reply, "bot", mode === "dummy" || mode === "mock" ? "Fallback mode (demo safe)" : "AI mode");
+      } catch (e) {
+        typingRow.remove();
+        modeBadge.textContent = "mode: error";
+        addBubble("Network error. Check server is running on port 5050.", "bot", "error");
+      }
+    }
+
+    // Enter to send (Shift+Enter for new line)
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    btnClear.addEventListener("click", () => {
+      messagesEl.innerHTML = "";
+      lastBotReply = "";
+      modeBadge.textContent = "mode: —";
+    });
+
+    btnCopy.addEventListener("click", async () => {
+      if (!lastBotReply) return alert("No reply to copy yet.");
+      try {
+        await navigator.clipboard.writeText(lastBotReply);
+        alert("Last reply copied ✅");
+      } catch {
+        alert("Copy failed (browser permission).");
+      }
+    });
+
+    // Welcome message
+    addBubble(
+      "Hi! I’m Jmbliss AI Assistant.\nAsk me about website structure, automation ideas, or AI features for WordPress/Shopify.",
+      "bot",
+      "ready"
+    );
+  </script>
+</body>
+</html>
