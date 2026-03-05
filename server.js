@@ -2,6 +2,10 @@ import express from "express";
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import cors from "cors";
+import mongoose from "mongoose";
+
+import ChatSession from "./models/ChatSession.js";
+import Lead from "./models/Lead.js";
 
 dotenv.config();
 
@@ -9,139 +13,124 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Health check
-app.get("/", (req, res) => {
-  res.send("API is running ✅ Use POST /chat");
-});
-
 const PORT = process.env.PORT || 5050;
 const apiKey = process.env.OPENAI_API_KEY;
+
+/* -------------------------------
+   MongoDB Connection
+--------------------------------*/
+const MONGODB_URI = process.env.MONGODB_URI;
+
+mongoose
+  .connect(MONGODB_URI)
+  .then(() => console.log("MongoDB connected ✅"))
+  .catch((err) => console.log("MongoDB connection error ❌", err));
+
+/* -------------------------------
+   OpenAI Setup
+--------------------------------*/
 const openai = new OpenAI({ apiKey });
 
-// ✅ Session memory store (in-memory)
-const sessions = {};
-const MAX_HISTORY = 10; // last 10 messages (user+assistant)
-
-// ✅ Dummy fallback (works without billing)
-function dummyReply(message, history = []) {
+/* -------------------------------
+   Dummy AI fallback
+--------------------------------*/
+function dummyReply(message) {
   const lower = message.toLowerCase();
-  const lastUserMsgs = history
-    .filter((m) => m.role === "user")
-    .slice(-2)
-    .map((m) => m.content)
-    .join(" | ");
 
   if (lower.includes("website") || lower.includes("sections")) {
-    return `Website sections:\n- Hero + CTA\n- Services\n- Why Us\n- Testimonials\n- Portfolio\n- FAQs\n- Contact\n\nContext remembered: ${lastUserMsgs || "No previous context"}`;
+    return `Website sections:
+- Hero + CTA
+- Services
+- Why Us
+- Testimonials
+- Portfolio
+- FAQs
+- Contact`;
   }
 
-  if (lower.includes("automation") || lower.includes("crm") || lower.includes("webhook")) {
-    return `Automation ideas:\n1) Form → CRM (HubSpot/Zoho)\n2) Form → WhatsApp + Email follow-up\n3) Lead → Google Sheet + Slack notification\n4) Booking → Calendar reminder\n\nContext remembered: ${lastUserMsgs || "No previous context"}`;
+  if (lower.includes("automation") || lower.includes("crm")) {
+    return `Automation ideas:
+1) Form → CRM
+2) Form → WhatsApp + Email
+3) Lead → Google Sheet
+4) Booking → Calendar reminder`;
   }
 
-  return `Got it: "${message}"\n\nNext steps:\n1) Tell me your business type\n2) Tell me your goal (leads/sales/support)\n\nContext remembered: ${lastUserMsgs || "No previous context"}`;
+  if (lower.includes("marketing")) {
+    return `Simple marketing strategy:
+1) Local SEO
+2) Instagram reels
+3) Google Ads for nearby customers
+4) Referral discount campaign`;
+  }
+
+  return `Thanks! I received your message: "${message}".  
+Tell me your business type and I’ll suggest a plan.`;
 }
 
-// ✅ Chat endpoint with memory
+/* -------------------------------
+   AI Chat Endpoint
+--------------------------------*/
 app.post("/chat", async (req, res) => {
   try {
     const { message, sessionId } = req.body || {};
 
-    if (!message || typeof message !== "string") {
+    if (!message) {
       return res.status(400).json({
-        error: "Bad Request",
-        details: "Send JSON like { sessionId: 'user1', message: 'hi' }",
+        error: "Send { message: '...' }",
       });
     }
 
-    const sid = sessionId && typeof sessionId === "string" ? sessionId : "default";
+    let session = await ChatSession.findOne({ sessionId });
 
-    // Create session if not exists
-    if (!sessions[sid]) {
-      sessions[sid] = [];
-    }
-
-    // Store user message in memory
-    sessions[sid].push({ role: "user", content: message });
-
-    // Keep only last MAX_HISTORY messages
-    if (sessions[sid].length > MAX_HISTORY) {
-      sessions[sid] = sessions[sid].slice(-MAX_HISTORY);
-    }
-
-    // If no API key → dummy mode
-    if (!apiKey) {
-      const reply = dummyReply(message, sessions[sid]);
-
-      sessions[sid].push({ role: "assistant", content: reply });
-      if (sessions[sid].length > MAX_HISTORY) {
-        sessions[sid] = sessions[sid].slice(-MAX_HISTORY);
-      }
-
-      return res.json({
-        reply,
-        mode: "dummy",
-        sessionId: sid,
-        historyCount: sessions[sid].length,
+    if (!session) {
+      session = await ChatSession.create({
+        sessionId,
+        messages: [],
       });
     }
 
-    // ✅ Timeout so request never loads forever
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    session.messages.push({
+      role: "user",
+      content: message,
+    });
+
+    let reply = "";
 
     try {
-      const completion = await openai.chat.completions.create(
-        {
-          model: "gpt-4o-mini",
-          max_tokens: 250,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are Jmbliss AI Assistant. Help with website structure, automation ideas, and AI features. Keep replies short, practical, and clear.",
-            },
-            ...sessions[sid], // ✅ send memory
-          ],
-        },
-        { signal: controller.signal }
-      );
+      if (!apiKey) throw new Error("No OpenAI key");
 
-      clearTimeout(timeout);
-
-      const reply = completion?.choices?.[0]?.message?.content || "";
-
-      // Store assistant reply in memory
-      sessions[sid].push({ role: "assistant", content: reply });
-      if (sessions[sid].length > MAX_HISTORY) {
-        sessions[sid] = sessions[sid].slice(-MAX_HISTORY);
-      }
-
-      return res.json({
-        reply,
-        mode: "openai",
-        sessionId: sid,
-        historyCount: sessions[sid].length,
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful business assistant. Reply short and practical.",
+          },
+          ...session.messages,
+        ],
+        max_tokens: 200,
       });
+
+      reply = completion?.choices?.[0]?.message?.content || "";
+
     } catch (err) {
-      clearTimeout(timeout);
-
-      // OpenAI failed → dummy fallback
-      const reply = dummyReply(message, sessions[sid]);
-
-      sessions[sid].push({ role: "assistant", content: reply });
-      if (sessions[sid].length > MAX_HISTORY) {
-        sessions[sid] = sessions[sid].slice(-MAX_HISTORY);
-      }
-
-      return res.json({
-        reply,
-        mode: "dummy",
-        sessionId: sid,
-        historyCount: sessions[sid].length,
-        details: String(err?.message || err),
-      });
+      reply = dummyReply(message);
     }
+
+    session.messages.push({
+      role: "assistant",
+      content: reply,
+    });
+
+    await session.save();
+
+    return res.json({
+      reply,
+      sessionId,
+    });
+
   } catch (error) {
     return res.status(500).json({
       error: "Server error",
@@ -150,6 +139,48 @@ app.post("/chat", async (req, res) => {
   }
 });
 
+/* -------------------------------
+   Day 6 Automation Webhook
+   Lead Capture Endpoint
+--------------------------------*/
+app.post("/webhook/lead", async (req, res) => {
+  try {
+    const { name, email, phone, message, source } = req.body || {};
+
+    if (!name || !email) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: "Send at least { name, email }"
+      });
+    }
+
+    const lead = await Lead.create({
+      name,
+      email,
+      phone,
+      message,
+      source: source || "website_form"
+    });
+
+    console.log("NEW LEAD:", lead);
+
+    return res.json({
+      success: true,
+      message: "Lead saved",
+      leadId: lead._id
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      error: "Server error",
+      details: err.message
+    });
+  }
+});
+
+/* -------------------------------
+   Start Server
+--------------------------------*/
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
